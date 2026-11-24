@@ -5,6 +5,7 @@ struct KeepAwakeApp: App {
     @StateObject private var sleepManager: SleepManager
     @StateObject private var appWatcher: AppWatcher
     @StateObject private var batteryMonitor: BatteryMonitor
+    @StateObject private var hotKey: HotKey
     @StateObject private var loginItem = LoginItem()
 
     init() {
@@ -12,6 +13,7 @@ struct KeepAwakeApp: App {
         _sleepManager = StateObject(wrappedValue: manager)
         _appWatcher = StateObject(wrappedValue: AppWatcher(sleepManager: manager))
         _batteryMonitor = StateObject(wrappedValue: BatteryMonitor(sleepManager: manager))
+        _hotKey = StateObject(wrappedValue: HotKey(sleepManager: manager))
     }
 
     var body: some Scene {
@@ -20,6 +22,7 @@ struct KeepAwakeApp: App {
                 manager: sleepManager,
                 watcher: appWatcher,
                 battery: batteryMonitor,
+                hotKey: hotKey,
                 loginItem: loginItem
             )
         } label: {
@@ -37,6 +40,7 @@ struct MenuContent: View {
     @ObservedObject var manager: SleepManager
     @ObservedObject var watcher: AppWatcher
     @ObservedObject var battery: BatteryMonitor
+    @ObservedObject var hotKey: HotKey
     @ObservedObject var loginItem: LoginItem
 
     var body: some View {
@@ -82,6 +86,7 @@ struct MenuContent: View {
                 isOn: $battery.pauseOnLowBattery
             )
         }
+        Toggle("Toggle with \(HotKey.displayName)", isOn: $hotKey.isEnabled)
 
         Toggle("Launch at Login", isOn: Binding(
             get: { loginItem.isEnabled },
