@@ -6,6 +6,7 @@ struct KeepAwakeApp: App {
     @StateObject private var appWatcher: AppWatcher
     @StateObject private var batteryMonitor: BatteryMonitor
     @StateObject private var hotKey: HotKey
+    @StateObject private var schedule: ScheduleManager
     @StateObject private var loginItem = LoginItem()
 
     init() {
@@ -14,6 +15,7 @@ struct KeepAwakeApp: App {
         _appWatcher = StateObject(wrappedValue: AppWatcher(sleepManager: manager))
         _batteryMonitor = StateObject(wrappedValue: BatteryMonitor(sleepManager: manager))
         _hotKey = StateObject(wrappedValue: HotKey(sleepManager: manager))
+        _schedule = StateObject(wrappedValue: ScheduleManager(sleepManager: manager))
     }
 
     var body: some Scene {
@@ -23,6 +25,7 @@ struct KeepAwakeApp: App {
                 watcher: appWatcher,
                 battery: batteryMonitor,
                 hotKey: hotKey,
+                schedule: schedule,
                 loginItem: loginItem
             )
         } label: {
@@ -41,6 +44,7 @@ struct MenuContent: View {
     @ObservedObject var watcher: AppWatcher
     @ObservedObject var battery: BatteryMonitor
     @ObservedObject var hotKey: HotKey
+    @ObservedObject var schedule: ScheduleManager
     @ObservedObject var loginItem: LoginItem
 
     var body: some View {
@@ -78,6 +82,35 @@ struct MenuContent: View {
             }
         }
 
+        Menu("Schedule") {
+            Toggle("Use Schedule", isOn: $schedule.isEnabled)
+
+            Divider()
+
+            Picker("Days", selection: $schedule.days) {
+                ForEach(ScheduleManager.Days.allCases) { option in
+                    Text(option.title).tag(option)
+                }
+            }
+            .pickerStyle(.menu)
+
+            Picker("From", selection: $schedule.startHour) {
+                ForEach(0..<24, id: \.self) { hour in
+                    Text(ScheduleManager.hourLabel(hour)).tag(hour)
+                }
+            }
+            .pickerStyle(.menu)
+
+            Picker("Until", selection: $schedule.endHour) {
+                ForEach(0..<24, id: \.self) { hour in
+                    Text(ScheduleManager.hourLabel(hour)).tag(hour)
+                }
+            }
+            .pickerStyle(.menu)
+        }
+
+        Divider()
+
         Toggle("Allow Display to Sleep", isOn: $manager.allowDisplaySleep)
 
         if battery.hasBattery {
@@ -86,6 +119,7 @@ struct MenuContent: View {
                 isOn: $battery.pauseOnLowBattery
             )
         }
+
         Toggle("Toggle with \(HotKey.displayName)", isOn: $hotKey.isEnabled)
 
         Toggle("Launch at Login", isOn: Binding(
@@ -119,6 +153,9 @@ struct MenuContent: View {
                 return "On while \(first) is running"
             }
             return "On while \(first) and \(others) more are running"
+        }
+        if let end = manager.scheduleEndText {
+            return "On by schedule until \(end)"
         }
         return "Keep Awake is off"
     }

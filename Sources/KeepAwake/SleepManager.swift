@@ -20,6 +20,10 @@ final class SleepManager: ObservableObject {
     /// True while the low battery pause is in effect.
     @Published private(set) var isPausedForLowBattery = false
 
+    /// When the schedule is keeping the Mac awake, the time it ends, such
+    /// as "18:00". Nil when the schedule is not in effect.
+    @Published private(set) var scheduleEndText: String?
+
     /// Names of chosen apps that are running now.
     @Published private(set) var triggeringApps: [String] = []
 
@@ -36,11 +40,10 @@ final class SleepManager: ObservableObject {
         }
     }
 
-    /// True while the Mac is being kept awake for any reason.
-        /// True when the user wants the Mac awake: a manual session is on, or a
-    /// chosen app is running.
+    /// True when the user wants the Mac awake: a manual session is on, a
+    /// chosen app is running, or the schedule is in effect.
     var wantsAwake: Bool {
-        isManualActive || !triggeringApps.isEmpty
+        isManualActive || !triggeringApps.isEmpty || scheduleEndText != nil
     }
 
     /// True while the Mac is actually being kept awake.
@@ -86,6 +89,15 @@ final class SleepManager: ObservableObject {
     func setPausedForLowBattery(_ paused: Bool) {
         if paused != isPausedForLowBattery {
             isPausedForLowBattery = paused
+        }
+        updateAssertion()
+    }
+
+    /// Called by ScheduleManager. Pass the end time while inside the
+    /// schedule, or nil when outside it.
+    func setSchedule(endText: String?) {
+        if endText != scheduleEndText {
+            scheduleEndText = endText
         }
         updateAssertion()
     }
