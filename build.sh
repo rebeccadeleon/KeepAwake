@@ -37,7 +37,12 @@ rm -rf "$DIST"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/$APP_NAME" "$APP/Contents/MacOS/$APP_NAME"
 cp Info.plist "$APP/Contents/Info.plist"
+cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $BUNDLE_ID" "$APP/Contents/Info.plist"
 
+codesign --force --options runtime --timestamp --sign "Developer ID Application: ENREV TECHNOLOGIES LLC (84WHUNNL89)" "$APP"
 echo
-echo "Built $APP (not signed)."
+echo "Built $APP (signed)."
+
+ditto -ck --keepParent "$APP" "$APP.zip"
+mv "$APP.zip" "releases/KeepAwake.zip"

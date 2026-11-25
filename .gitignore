@@ -1,2 +1,5 @@
 .build/
 dist/
+**/.DS_Store
+build.sh
+generate-icns.sh

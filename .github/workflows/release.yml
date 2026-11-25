@@ -8,230 +8,140 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: write   # needed to attach the dmg to a GitHub release
+  contents: read
 
 jobs:
   notarize:
-    runs-on: xcode-27          # GitHub's Xcode 27 image (Apple silicon)
-    timeout-minutes: 360       # the maximum for a GitHub-hosted runner
-
-    env:
-      XCODE_VERSION: "27.2"
-      VOLUME_NAME: Keep Awake            # name shown when the dmg is mounted
-      APP: dist/KeepAwake.app
-      DMG: dist/KeepAwake.dmg
-      # Stop polling Apple a little before the job itself is killed, so the
-      # job can still report the submission ID and clean up.
-      NOTARY_WAIT_MINUTES: "330"
-      NOTARY_POLL_SECONDS: "30"
-      NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
-      NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+    runs-on: macos-15
+    timeout-minutes: 360
 
     steps:
-      - name: Check out
-        uses: actions/checkout@v6
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Select Xcode ${{ env.XCODE_VERSION }}
+      - name: Extract prebuilt app
         run: |
-          XCODE_APP="/Applications/Xcode_${XCODE_VERSION}.app"
-          if [ -d "$XCODE_APP" ]; then
-            sudo xcode-select -s "$XCODE_APP"
-          else
-            echo "::warning::Xcode ${XCODE_VERSION} is not at ${XCODE_APP}; using the image default."
-            ls /Applications | grep -i xcode || true
-          fi
-          xcodebuild -version
-          swift --version
+          mkdir -p output
+          ditto -x -k releases/KeepAwake.zip output
 
-      - name: Import Developer ID certificate
+      - name: Verify Developer ID signature
+        run: |
+          codesign --verify --deep --strict --verbose=2 \
+            output/KeepAwake.app
+          codesign -dv --verbose=4 output/KeepAwake.app
+
+      - name: Configure Apple API key
         env:
-          CERT_P12_BASE64: ${{ secrets.DEVELOPER_ID_CERT_P12_BASE64 }}
-          CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
+          API_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+          KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
         run: |
-          KEYCHAIN_PATH="$RUNNER_TEMP/signing.keychain-db"
-          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
-          CERT_PATH="$RUNNER_TEMP/developer-id.p12"
+          KEY_PATH="$RUNNER_TEMP/AuthKey_${KEY_ID}.p8"
+          printf '%s\n' "$API_KEY" > "$KEY_PATH"
+          chmod 600 "$KEY_PATH"
 
-          echo "$CERT_P12_BASE64" | base64 --decode > "$CERT_PATH"
-
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security import "$CERT_PATH" -P "$CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
-          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" > /dev/null
-          security list-keychain -d user -s "$KEYCHAIN_PATH"
-          rm -f "$CERT_PATH"
-
-          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
-          SIGN_IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" \
-            | grep 'Developer ID Application' | head -n 1 | sed -E 's/.*"(.*)".*/\1/' || true)"
-          if [ -z "$SIGN_IDENTITY" ]; then
-            echo "::error::No Developer ID Application certificate found in the imported .p12."
-            exit 1
-          fi
-          echo "SIGN_IDENTITY=$SIGN_IDENTITY" >> "$GITHUB_ENV"
-
-      - name: Write notarization API key
+      - name: Submit to Apple Notary Service
         env:
-          NOTARY_API_KEY_P8_BASE64: ${{ secrets.NOTARY_API_KEY_P8_BASE64 }}
+          KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
         run: |
-          KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
-          echo "$NOTARY_API_KEY_P8_BASE64" | base64 --decode > "$KEY_PATH"
-          echo "NOTARY_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
+          set -euo pipefail
 
-      - name: Build app
-        run: ./build.sh
+          xcrun notarytool submit releases/KeepAwake.zip \
+            --key "$RUNNER_TEMP/AuthKey_${KEY_ID}.p8" \
+            --key-id "$KEY_ID" \
+            --issuer "$ISSUER_ID" \
+            --output-format json \
+            | tee notarization.json
 
-      - name: Sign app
-        run: |
-          codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP"
-          codesign --verify --strict --verbose=2 "$APP"
+          SUBMISSION_ID=$(python3 -c \
+            'import json; print(json.load(open("notarization.json"))["id"])')
 
-      - name: Create dmg
-        run: |
-          STAGING="$RUNNER_TEMP/dmg-staging"
-          rm -rf "$STAGING"
-          mkdir -p "$STAGING"
-          ditto "$APP" "$STAGING/$(basename "$APP")"
-          ln -s /Applications "$STAGING/Applications"
-
-          # hdiutil sometimes fails with "Resource busy" on CI machines; retry.
-          ATTEMPT=1
-          until hdiutil create -volname "$VOLUME_NAME" -srcfolder "$STAGING" \
-                  -fs HFS+ -format UDZO -ov "$DMG"; do
-            if [ "$ATTEMPT" -ge 3 ]; then
-              echo "::error::hdiutil create failed $ATTEMPT times."
-              exit 1
-            fi
-            ATTEMPT=$((ATTEMPT + 1))
-            sleep 5
-          done
-
-      - name: Sign dmg
-        run: |
-          codesign --force --timestamp --sign "$SIGN_IDENTITY" "$DMG"
-          codesign --verify --verbose "$DMG"
-          shasum -a 256 "$DMG"
-
-      # Upload without waiting, so the submission ID is recorded right away.
-      - name: Submit dmg for notarization
-        id: submit
-        run: |
-          echo "Uploading $DMG to Apple..."
-          xcrun notarytool submit "$DMG" \
-            --key "$NOTARY_KEY_PATH" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" \
-            --output-format json > "$RUNNER_TEMP/submit.json"
-          cat "$RUNNER_TEMP/submit.json"; echo
-
-          SUBMISSION_ID="$(jq -r '.id // empty' "$RUNNER_TEMP/submit.json")"
-          if [ -z "$SUBMISSION_ID" ]; then
-            echo "::error::Apple did not return a submission ID."
-            exit 1
-          fi
-          echo "id=$SUBMISSION_ID" >> "$GITHUB_OUTPUT"
-
-          echo "::notice title=Notarization submission ID::$SUBMISSION_ID"
-          echo "Submitted at $(date -u '+%Y-%m-%d %H:%M:%S') UTC"
           echo "Submission ID: $SUBMISSION_ID"
+          echo "SUBMISSION_ID=$SUBMISSION_ID" >> "$GITHUB_ENV"
 
-          {
-            echo "## Notarization"
-            echo
-            echo "- Submission ID: \`$SUBMISSION_ID\`"
-            echo "- Submitted: $(date -u '+%Y-%m-%d %H:%M:%S') UTC"
-            echo "- dmg SHA-256: \`$(shasum -a 256 "$DMG" | awk '{print $1}')\`"
-            echo
-            echo "Check the status yourself, from any Mac:"
-            echo
-            echo '```bash'
-            echo "xcrun notarytool info $SUBMISSION_ID --key AuthKey_XXXX.p8 --key-id <KEY_ID> --issuer <ISSUER_ID>"
-            echo "xcrun notarytool log  $SUBMISSION_ID --key AuthKey_XXXX.p8 --key-id <KEY_ID> --issuer <ISSUER_ID>"
-            echo '```'
-            echo
-            echo "If this job stops before Apple answers, download the"
-            echo "\`KeepAwake-signed-not-stapled\` artifact and, once the status is"
-            echo "Accepted, run \`xcrun stapler staple KeepAwake.dmg\`."
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      # Saved before waiting, so the exact file Apple received survives even
-      # if the job times out. It can be stapled later by hand.
-      - name: Upload signed dmg (not yet stapled)
-        uses: actions/upload-artifact@v6
-        with:
-          name: KeepAwake-signed-not-stapled
-          path: ${{ env.DMG }}
-          if-no-files-found: error
-
-      - name: Wait for notarization
+      - name: Wait for Apple notarization
         env:
-          SUBMISSION_ID: ${{ steps.submit.outputs.id }}
+          KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
         run: |
-          START="$(date +%s)"
-          DEADLINE=$(( START + NOTARY_WAIT_MINUTES * 60 ))
-          echo "Polling every ${NOTARY_POLL_SECONDS}s for up to ${NOTARY_WAIT_MINUTES} minutes."
+          set -euo pipefail
 
-          while true; do
-            STATUS="$(xcrun notarytool info "$SUBMISSION_ID" \
-              --key "$NOTARY_KEY_PATH" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" \
-              --output-format json 2>/dev/null | jq -r '.status // empty' 2>/dev/null || true)"
+          KEY_PATH="$RUNNER_TEMP/AuthKey_${KEY_ID}.p8"
 
-            NOW="$(date +%s)"
-            ELAPSED=$(( NOW - START ))
-            printf '[%s UTC] submission %s: %s (waited %dm %02ds)\n' \
-              "$(date -u '+%H:%M:%S')" "$SUBMISSION_ID" \
-              "${STATUS:-no answer from Apple, will retry}" \
-              $(( ELAPSED / 60 )) $(( ELAPSED % 60 ))
+          for i in $(seq 1 90); do
+            echo "Checking notarization status ($i/90)"
 
-            case "$STATUS" in
-              "Accepted")
-                break
-                ;;
-              "In Progress" | "")
-                ;;
-              *)
-                echo "::error::Notarization finished with status: $STATUS"
-                xcrun notarytool log "$SUBMISSION_ID" \
-                  --key "$NOTARY_KEY_PATH" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" || true
-                echo "- Result: **$STATUS**" >> "$GITHUB_STEP_SUMMARY"
-                exit 1
-                ;;
-            esac
+            xcrun notarytool info "$SUBMISSION_ID" \
+              --key "$KEY_PATH" \
+              --key-id "$KEY_ID" \
+              --issuer "$ISSUER_ID" \
+              --output-format json \
+              > notarization-status.json
 
-            if [ "$NOW" -ge "$DEADLINE" ]; then
-              echo "::error::Still waiting after ${NOTARY_WAIT_MINUTES} minutes. Submission $SUBMISSION_ID is still with Apple; check it by hand (see the job summary)."
-              echo "- Result: **still in progress when the job gave up**" >> "$GITHUB_STEP_SUMMARY"
+            cat notarization-status.json
+
+            STATUS=$(python3 -c \
+              'import json; print(json.load(open("notarization-status.json"))["status"])')
+
+            if [ "$STATUS" = "Accepted" ]; then
+              echo "Notarization accepted!"
+              exit 0
+            fi
+
+            if [ "$STATUS" = "Invalid" ]; then
+              echo "Notarization rejected."
               exit 1
             fi
 
-            sleep "$NOTARY_POLL_SECONDS"
+            sleep 120
           done
 
-          echo "- Result: **Accepted**" >> "$GITHUB_STEP_SUMMARY"
-          echo "Apple's log for the accepted submission:"
-          xcrun notarytool log "$SUBMISSION_ID" \
-            --key "$NOTARY_KEY_PATH" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" || true
+          echo "Timed out waiting for Apple notarization."
+          exit 1
 
-      - name: Staple and verify dmg
-        run: |
-          xcrun stapler staple "$DMG"
-          xcrun stapler validate "$DMG"
-          spctl --assess --type open --context context:primary-signature --verbose "$DMG"
-
-      - name: Upload notarized dmg
-        uses: actions/upload-artifact@v6
-        with:
-          name: KeepAwake
-          path: ${{ env.DMG }}
-          if-no-files-found: error
-
-      - name: Publish GitHub release
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Retrieve Apple notarization log
+        if: always() && env.SUBMISSION_ID != ''
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" "$DMG" --title "Keep Awake $GITHUB_REF_NAME" --generate-notes
-
-      - name: Clean up secrets
-        if: always()
+          KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
         run: |
-          security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
-          rm -f "$RUNNER_TEMP/AuthKey.p8" "$RUNNER_TEMP/developer-id.p12"
+          KEY_PATH="$RUNNER_TEMP/AuthKey_${KEY_ID}.p8"
+
+          xcrun notarytool log "$SUBMISSION_ID" \
+            --key "$KEY_PATH" \
+            --key-id "$KEY_ID" \
+            --issuer "$ISSUER_ID" \
+            notarization-log.json || true
+
+          if [ -f notarization-log.json ]; then
+            cat notarization-log.json
+          fi
+
+      - name: Staple notarization ticket
+        run: |
+          xcrun stapler staple output/KeepAwake.app
+          xcrun stapler validate output/KeepAwake.app
+
+      - name: Package notarized application
+        run: |
+          ditto -c -k --keepParent \
+            output/KeepAwake.app \
+            KeepAwake-notarized.zip
+
+      - name: Upload notarized application
+        uses: actions/upload-artifact@v4
+        with:
+          name: KeepAwake-notarized
+          path: KeepAwake-notarized.zip
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: notarization-diagnostics
+          path: |
+            notarization.json
+            notarization-status.json
+            notarization-log.json
+          if-no-files-found: ignore
+

@@ -39,11 +39,7 @@ final class HotKey: ObservableObject {
 
     /// Called when the shortcut is pressed.
     private func handlePress() {
-        if sleepManager.isManualActive {
-            sleepManager.deactivate()
-        } else {
-            sleepManager.activate()
-        }
+        sleepManager.toggle()
     }
 
     /// Tells the system to call us when any of this app's hot keys is pressed.
