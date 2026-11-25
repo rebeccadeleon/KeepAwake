@@ -4,7 +4,7 @@
 # image creation and notarization happen in .github/workflows/release.yml.
 #
 # Settings (environment variables, all optional):
-#   BUNDLE_ID     Bundle identifier.  Default: com.example.KeepAwake
+#   BUNDLE_ID     Bundle identifier.  Default: com.enrev.KeepAwake
 #   UNIVERSAL=1   Build for Apple silicon + Intel (needs full Xcode).
 #
 # Example:
@@ -14,7 +14,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 APP_NAME="KeepAwake"
-BUNDLE_ID="${BUNDLE_ID:-com.rebecca.KeepAwake}"
+BUNDLE_ID="${BUNDLE_ID:-com.enrev.KeepAwake}"
 UNIVERSAL="${UNIVERSAL:-1}"
 
 DIST="dist"

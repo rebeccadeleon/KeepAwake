@@ -16,7 +16,6 @@ jobs:
     timeout-minutes: 360       # the maximum for a GitHub-hosted runner
 
     env:
-      BUNDLE_ID: com.example.KeepAwake   # change to your own identifier
       XCODE_VERSION: "27.2"
       VOLUME_NAME: Keep Awake            # name shown when the dmg is mounted
       APP: dist/KeepAwake.app

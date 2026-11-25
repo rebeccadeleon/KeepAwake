@@ -17,7 +17,7 @@ the GitHub Actions workflow does that.
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `BUNDLE_ID` | Bundle identifier | `com.example.KeepAwake` |
+| `BUNDLE_ID` | Bundle identifier | `com.enrev.KeepAwake` |
 | `UNIVERSAL=1` | Build for Apple silicon and Intel (needs full Xcode) | Off |
 
 ## Sign and notarize with GitHub Actions
