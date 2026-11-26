@@ -19,6 +19,7 @@ final class ReportManager: ObservableObject {
     private let downloads: DownloadManager
     private let electricity: ElectricityPriceManager
     private let websites: WebsiteMonitor
+    private let activity: ActivityHistoryManager
 
     init(
         sleep: SleepManager,
@@ -28,7 +29,8 @@ final class ReportManager: ObservableObject {
         assertions: AssertionMonitor,
         downloads: DownloadManager,
         electricity: ElectricityPriceManager,
-        websites: WebsiteMonitor
+        websites: WebsiteMonitor,
+        activity: ActivityHistoryManager
     ) {
         self.sleep = sleep
         self.battery = battery
@@ -38,6 +40,7 @@ final class ReportManager: ObservableObject {
         self.downloads = downloads
         self.electricity = electricity
         self.websites = websites
+        self.activity = activity
     }
 
     func generate() async {
@@ -139,6 +142,11 @@ final class ReportManager: ObservableObject {
             case .raw:
                 sections.append(
                     await rawSection()
+                )
+
+            case .activity:
+                sections.append(
+                    activitySection(privacy: privacy)
                 )
             }
         }
@@ -783,6 +791,95 @@ final class ReportManager: ObservableObject {
         return ReportSection(
             type: .raw,
             paragraphs: paragraphs
+        )
+    }
+
+    private func activitySection(
+        privacy: Bool
+    ) -> ReportSection {
+        activity.refresh()
+
+        let analytics = activity.analytics
+
+        let dailyRows: [[String]] =
+            analytics.dailyActivity.map { day in
+                [
+                    day.date.formatted(
+                        date: .abbreviated,
+                        time: .omitted
+                    ),
+                    String(
+                        format: "%.2f hours",
+                        day.hours
+                    )
+                ]
+            }
+
+        let eventRows: [[String]] =
+            activity.events.prefix(100).map { event in
+                [
+                    event.timestamp.formatted(
+                        date: .abbreviated,
+                        time: .standard
+                    ),
+                    event.type.category.rawValue,
+                    event.type.title,
+                    privacy
+                        ? "[Redacted]"
+                        : event.detail
+                ]
+            }
+
+        return ReportSection(
+            type: .activity,
+            fields: [
+                field(
+                    "Period",
+                    activity.period.title
+                ),
+                field(
+                    "Sleep prevention duration",
+                    analytics.formattedAwakeDuration
+                ),
+                field(
+                    "Active intervals",
+                    String(analytics.sessionCount)
+                ),
+                field(
+                    "Sleep events",
+                    String(analytics.sleepCount)
+                ),
+                field(
+                    "Wake events",
+                    String(analytics.wakeCount)
+                ),
+                field(
+                    "Completed downloads",
+                    String(analytics.completedDownloads)
+                ),
+                field(
+                    "Failed downloads",
+                    String(analytics.failedDownloads)
+                )
+            ],
+            tables: [
+                ReportTable(
+                    headers: [
+                        "Date",
+                        "Sleep prevention duration"
+                    ],
+                    rows: dailyRows
+                ),
+                ReportTable(
+                    headers: [
+                        "Timestamp",
+                        "Category",
+                        "Event",
+                        "Detail"
+                    ],
+                    rows: eventRows
+                )
+            ]
         )
     }
 

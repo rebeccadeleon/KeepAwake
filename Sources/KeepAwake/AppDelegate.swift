@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var websiteMonitor: WebsiteMonitor!
     private var assertionMonitor: AssertionMonitor!
     private var reportManager: ReportManager!
+    private var activityManager: ActivityHistoryManager!
 
     private var appWatcher: AppWatcher!
     private var batteryMonitor: BatteryMonitor!
@@ -71,6 +72,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         assertionMonitor = AssertionMonitor()
 
+        activityManager = ActivityHistoryManager(
+            sleepManager: sleepManager,
+            assertionMonitor: assertionMonitor,
+            downloadManager: downloadManager
+        )
+
         reportManager = ReportManager(
             sleep: sleepManager,
             battery: batteryMonitor,
@@ -79,7 +86,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             assertions: assertionMonitor,
             downloads: downloadManager,
             electricity: electricityManager,
-            websites: websiteMonitor
+            websites: websiteMonitor,
+            activity: activityManager
         )
 
         createPopover()
@@ -99,6 +107,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         applyVisibility()
     }
 
+    func applicationWillTerminate(
+        _ notification: Notification
+    ) {
+        activityManager?.shutdown()
+    }
+
     func applicationShouldTerminateAfterLastWindowClosed(
         _ sender: NSApplication
     ) -> Bool {
@@ -109,8 +123,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ sender: NSApplication,
         hasVisibleWindows flag: Bool
     ) -> Bool {
-        visibility.show()
-        openSettings()
+        let configuration = NSWorkspace.OpenConfiguration()
+
+        configuration.createsNewApplicationInstance = true
+        configuration.activates = true
+
+        NSWorkspace.shared.openApplication(
+            at: Bundle.main.bundleURL,
+            configuration: configuration
+        ) { _, error in
+            if let error = error {
+                print("Failed to launch new instance: \(error)")
+            }
+        }
 
         return false
     }
@@ -421,7 +446,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             assertions: assertionMonitor,
             electricity: electricityManager,
             websites: websiteMonitor,
-            reports: reportManager
+            reports: reportManager,
+            activity: activityManager
         )
 
         let controller = NSHostingController(

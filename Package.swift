@@ -9,7 +9,13 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "KeepAwake",
-            path: "Sources/KeepAwake"
+            path: "Sources/KeepAwake",
+            linkerSettings: [
+                .linkedFramework("AppKit"),
+                .linkedFramework("IOKit"),
+                .linkedFramework("Carbon"),
+                .linkedLibrary("sqlite3")
+            ]
         )
     ]
 )

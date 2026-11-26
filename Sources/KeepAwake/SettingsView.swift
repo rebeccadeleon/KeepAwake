@@ -15,6 +15,7 @@ struct SettingsView: View {
     @ObservedObject var electricity: ElectricityPriceManager
     @ObservedObject var websites: WebsiteMonitor
     @ObservedObject var reports: ReportManager
+    @ObservedObject var activity: ActivityHistoryManager
     @State private var searchText = ""
 
     var body: some View {
@@ -71,6 +72,16 @@ struct SettingsView: View {
                 Label(
                     "Assertions",
                     systemImage: "waveform.path"
+                )
+            }
+
+            ActivitySettingsView(
+                manager: activity
+            )
+            .tabItem {
+                Label(
+                    "Activity",
+                    systemImage: "chart.bar.xaxis"
                 )
             }
 
@@ -501,37 +512,84 @@ struct SettingsView: View {
     // MARK: - About
 
     private var aboutTab: some View {
-        VStack(spacing: 12) {
-            Image(nsImage: NSApp.applicationIconImage)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 96, height: 96)
+        ScrollView {
+            VStack(spacing: 16) {
+                Image(nsImage: NSApp.applicationIconImage)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 80, height: 80)
 
-            Text(AppInfo.name)
-                .font(.title)
-                .fontWeight(.bold)
+                Text(AppInfo.name)
+                    .font(.title)
+                    .fontWeight(.semibold)
 
-            Text("Version \(AppInfo.version) (\(AppInfo.build))")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                Text("Version \(AppInfo.version) (\(AppInfo.build))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
-            Text(AppInfo.description)
-                .font(.system(size: 12))
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
+                Text(AppInfo.description)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
 
-            Divider()
-                .frame(width: 240)
-                .padding(.vertical, 8)
+                Divider()
 
-            Text("Built with SwiftUI and IOKit")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                termsSection
+            }
+            .padding(24)
+            .frame(maxWidth: 600)
+            .frame(maxWidth: .infinity)
         }
-        .frame(
-            maxWidth: .infinity,
-            maxHeight: .infinity
-        )
+    }
+
+    private var termsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label(
+                    "Terms of Use",
+                    systemImage: "doc.text"
+                )
+                .font(.system(size: 13, weight: .semibold))
+
+                Spacer()
+
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(
+                        AppInfo.terms,
+                        forType: .string
+                    )
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                }
+                .buttonStyle(.plain)
+                .help("Copy Terms of Use")
+            }
+
+            ScrollView {
+                Text(AppInfo.terms)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .lineSpacing(4)
+                    .textSelection(.enabled)
+                    .frame(
+                        maxWidth: .infinity,
+                        alignment: .leading
+                    )
+                    .padding(12)
+            }
+            .frame(height: 180)
+            .background(
+                Color.secondary.opacity(0.06),
+                in: RoundedRectangle(cornerRadius: 8)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(
+                        Color.secondary.opacity(0.12)
+                    )
+            }
+        }
     }
 
     private var appVersion: String {
