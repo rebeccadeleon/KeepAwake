@@ -92,6 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         configureApplicationMenu()
+
         if visibility.startHidden && visibility.canHide {
             visibility.hide()
         }

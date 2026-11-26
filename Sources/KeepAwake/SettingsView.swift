@@ -507,18 +507,18 @@ struct SettingsView: View {
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 96, height: 96)
 
-            Text("KeepAwake")
-                .font(.system(size: 24, weight: .semibold))
+            Text(AppInfo.name)
+                .font(.title)
+                .fontWeight(.bold)
 
-            Text("Version \(appVersion)")
+            Text("Version \(AppInfo.version) (\(AppInfo.build))")
+                .font(.caption)
                 .foregroundStyle(.secondary)
 
-            Text(
-                "A lightweight power and sleep management utility for macOS."
-            )
-            .multilineTextAlignment(.center)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: 300)
+            Text(AppInfo.description)
+                .font(.system(size: 12))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
 
             Divider()
                 .frame(width: 240)

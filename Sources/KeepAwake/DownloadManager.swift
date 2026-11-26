@@ -267,18 +267,18 @@ final class DownloadManager: ObservableObject {
         }
 
         do {
-            try await DownloadedFileOpener.open(
-                destination,
-                application:
-                    application ?? item.options.openApplication,
-                automatic: false
+            try DownloadedFileOpener.validateDocument(destination)
+
+            try await FileDownloader.downloadAndOpen(
+                from: item.url.absoluteString,
+                to: destination.path,
+                autoOpen: false
             )
 
             setOpeningError(
                 for: item.id,
                 message: nil
             )
-
         } catch {
             setOpeningError(
                 for: item.id,
@@ -354,11 +354,10 @@ final class DownloadManager: ObservableObject {
 
             if item.options.openWhenCompleted {
                 do {
-                    try await DownloadedFileOpener.open(
-                        destination,
-                        application:
-                            item.options.openApplication,
-                        automatic: true
+                    try await FileDownloader.downloadAndOpen(
+                        from: item.url.absoluteString,
+                        to: destination.path,
+                        autoOpen: true
                     )
                 } catch {
                     errors.append(
