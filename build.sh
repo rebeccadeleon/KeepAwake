@@ -46,3 +46,4 @@ echo "Built $APP (signed)."
 
 ditto -ck --keepParent "$APP" "$APP.zip"
 mv "$APP.zip" "releases/KeepAwake.zip"
+open "$APP"

@@ -14,6 +14,7 @@ struct SettingsView: View {
     @ObservedObject var assertions: AssertionMonitor
     @ObservedObject var electricity: ElectricityPriceManager
     @ObservedObject var websites: WebsiteMonitor
+    @ObservedObject var reports: ReportManager
     @State private var searchText = ""
 
     var body: some View {
@@ -70,6 +71,16 @@ struct SettingsView: View {
                 Label(
                     "Assertions",
                     systemImage: "waveform.path"
+                )
+            }
+
+            ReportSettingsView(
+                manager: reports
+            )
+            .tabItem {
+                Label(
+                    "Reports",
+                    systemImage: "doc.text"
                 )
             }
 
@@ -388,6 +399,21 @@ struct SettingsView: View {
                         systemImage: "menubar.rectangle"
                     )
                 }
+            }
+
+            Section("Startup Behavior") {
+                Toggle(
+                    "Start hidden",
+                    isOn: $visibility.startHidden
+                )
+
+                Text(
+                    "Launch KeepAwake without showing its Dock " +
+                    "or menu bar icon. Press " +
+                    "⌃⌥⌘H to restore visibility."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
 
             Section("Recovery shortcut") {

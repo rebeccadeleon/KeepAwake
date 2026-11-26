@@ -14,6 +14,15 @@ final class VisibilityManager: ObservableObject {
     @Published private(set) var isHidden = false
     @Published private(set) var recoveryAvailable = false
     @Published private(set) var visibilityError: String?
+    @Published var startHidden: Bool =
+        UserDefaults.standard.bool(forKey: "startHidden") {
+        didSet {
+            UserDefaults.standard.set(
+                startHidden,
+                forKey: "startHidden"
+            )
+        }
+    }
 
     var onVisibilityChanged: (() -> Void)?
 

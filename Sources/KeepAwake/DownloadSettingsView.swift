@@ -21,6 +21,8 @@ struct DownloadSettingsView: View {
                 )
             }
 
+            downloadOptionsSection
+
             HStack {
                 Label(
                     "\(manager.activeCount) active downloads",
@@ -71,6 +73,138 @@ struct DownloadSettingsView: View {
         .padding(16)
     }
 
+    private var downloadOptionsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("DOWNLOAD OPTIONS")
+                .font(.system(
+                    size: 10,
+                    weight: .semibold
+                ))
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Save location")
+                    .font(.system(size: 12))
+
+                HStack(spacing: 8) {
+                    TextField(
+                        "Destination",
+                        text: $manager.options.destinationDirectory
+                    )
+                    .textFieldStyle(.roundedBorder)
+
+                    Button("Browse...") {
+                        manager.chooseDestinationDirectory()
+                    }
+                }
+            }
+
+            Divider()
+
+            Toggle(
+                "Keep Mac awake during download",
+                isOn: $manager.options.keepAwake
+            )
+
+            Toggle(
+                "Open document when completed",
+                isOn: $manager.options.openWhenCompleted
+            )
+
+            if manager.options.openWhenCompleted {
+                Picker(
+                    "Open with",
+                    selection: $manager.options.openApplication
+                ) {
+                    ForEach(
+                        DownloadOpenApplication.allCases
+                    ) { application in
+                        Text(application.rawValue)
+                            .tag(application)
+                    }
+                }
+                .padding(.leading, 20)
+
+                Text(
+                    "Automatic opening applies to PDF " +
+                    "documents and supported images."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.leading, 20)
+            }
+
+            Toggle(
+                "Reveal in Finder when completed",
+                isOn: $manager.options.revealWhenCompleted
+            )
+        }
+        .font(.system(size: 12))
+        .padding(12)
+        .background(
+            Color.secondary.opacity(0.06),
+            in: RoundedRectangle(cornerRadius: 8)
+        )
+    }
+
+    private func completedDownloadActions(
+        _ item: DownloadItem
+    ) -> some View {
+        HStack(spacing: 10) {
+            Menu {
+                Button("Open") {
+                    Task {
+                        await manager.openFile(
+                            item,
+                            application: .systemDefault
+                        )
+                    }
+                }
+
+                Button("Open in Preview") {
+                    Task {
+                        await manager.openFile(
+                            item,
+                            application: .preview
+                        )
+                    }
+                }
+
+                Divider()
+
+                Button("Show in Finder") {
+                    manager.revealFile(item)
+                }
+
+            } label: {
+                Image(systemName: "arrow.up.forward.app")
+                    .font(.system(size: 14))
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("Open downloaded file")
+
+            Button {
+                manager.revealFile(item)
+            } label: {
+                Image(systemName: "folder")
+                    .font(.system(size: 14))
+            }
+            .buttonStyle(.plain)
+            .help("Show in Finder")
+
+            Button {
+                manager.remove(item.id)
+            } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Remove from download list")
+        }
+    }
+
     private func downloadRow(
         _ item: DownloadItem
     ) -> some View {
@@ -99,6 +233,10 @@ struct DownloadSettingsView: View {
                     .foregroundStyle(.secondary)
                 }
 
+                if item.state == .completed {
+                    completedDownloadActions(item)
+                }
+
                 Text(item.state.rawValue)
                     .font(.caption)
                     .foregroundStyle(
@@ -112,9 +250,32 @@ struct DownloadSettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.red)
                 }
+
+                if let error = item.openingError {
+                    Label(
+                        error,
+                        systemImage: "exclamationmark.circle"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(
+                        horizontal: false,
+                        vertical: true
+                    )
+                }
             }
 
             Spacer()
+
+            if item.state == .downloading &&
+                item.options.keepAwake {
+                Label(
+                    "Sleep protection enabled",
+                    systemImage: "cup.and.saucer.fill"
+                )
+                .font(.caption2)
+                .foregroundStyle(.green)
+            }
 
             if item.state == .downloading {
                 Button {

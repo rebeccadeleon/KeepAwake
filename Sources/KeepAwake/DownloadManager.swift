@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import AppKit
 
 enum DownloadState: String {
     case downloading = "Downloading"
@@ -19,6 +20,9 @@ struct DownloadItem: Identifiable {
     var state: DownloadState = .downloading
     var error: String?
     var destination: URL?
+    var options: DownloadOptions = DownloadOptions()
+
+    var openingError: String? = nil
 
     var progress: Double {
         guard totalBytes > 0 else {
@@ -49,8 +53,54 @@ final class DownloadManager: ObservableObject {
         configuration: .default
     )
 
+    private static let optionsKey =
+    "downloads.defaultOptions"
+
+    @Published var options: DownloadOptions =
+        DownloadOptions() {
+        didSet {
+            if let data = try? JSONEncoder().encode(options) {
+                UserDefaults.standard.set(
+                    data,
+                    forKey: Self.optionsKey
+                )
+            }
+        }
+    }
+
     init(sleepManager: SleepManager) {
         self.sleepManager = sleepManager
+        if let data = UserDefaults.standard.data(
+            forKey: Self.optionsKey
+        ),
+        let savedOptions = try? JSONDecoder().decode(
+            DownloadOptions.self,
+            from: data
+        ) {
+            options = savedOptions
+        }
+    }
+
+    func chooseDestinationDirectory() {
+        let panel = NSOpenPanel()
+
+        panel.title = "Choose Download Location"
+        panel.prompt = "Select"
+
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+
+        panel.directoryURL = URL(
+            fileURLWithPath: options.destinationDirectory,
+            isDirectory: true
+        )
+
+        if panel.runModal() == .OK,
+        let url = panel.url {
+            options.destinationDirectory = url.path
+        }
     }
 
     var activeCount: Int {
@@ -72,19 +122,20 @@ final class DownloadManager: ObservableObject {
 
         let id = UUID()
 
-        let item = DownloadItem(
+        let downloadOptions = options
+
+        var item = DownloadItem(
             id: id,
             url: url,
             fileName: url.lastPathComponent.isEmpty
                 ? "Download"
                 : url.lastPathComponent
         )
-
+        item.options = downloadOptions
         items.insert(item, at: 0)
 
-        let task = session.downloadTask(
-            with: url
-        ) { [weak self] temporaryURL, response, error in
+        let task: URLSessionDownloadTask =
+            session.downloadTask(with: url) { [weak self] temporaryURL, response, error in
 
             var destination: URL?
             var failure = error?.localizedDescription
@@ -101,33 +152,40 @@ final class DownloadManager: ObservableObject {
                         throw URLError(.badServerResponse)
                     }
 
-                    let folder = try FileManager.default.url(
-                        for: .downloadsDirectory,
-                        in: .userDomainMask,
-                        appropriateFor: nil,
-                        create: true
+                    let directory = URL(
+                        fileURLWithPath:
+                            (downloadOptions.destinationDirectory as NSString)
+                                .expandingTildeInPath,
+                        isDirectory: true
                     )
 
+                    try FileManager.default.createDirectory(
+                        at: directory,
+                        withIntermediateDirectories: true
+                    )
+
+                    // Determine the downloaded filename.
                     let suggestedName =
-                        response?.suggestedFilename
-                        ?? url.lastPathComponent
+                        response?.suggestedFilename ?? url.lastPathComponent
 
-                    let safeName = URL(
-                        fileURLWithPath: suggestedName
-                    ).lastPathComponent
+                    let sanitizedName = (suggestedName as NSString)
+                        .lastPathComponent
 
-                    let name = safeName.isEmpty
-                        ? "Download"
-                        : safeName
+                    let fileName = sanitizedName.isEmpty ||
+                                sanitizedName == "." ||
+                                sanitizedName == ".."
+                        ? "Download-\(id.uuidString)"
+                        : sanitizedName
 
-                    var target = folder
-                        .appendingPathComponent(name)
+                    var target = directory
+                        .appendingPathComponent(fileName)
 
+                    // Avoid overwriting an existing file.
                     if FileManager.default.fileExists(
                         atPath: target.path
                     ) {
-                        target = folder.appendingPathComponent(
-                            "\(UUID().uuidString)-\(name)"
+                        target = directory.appendingPathComponent(
+                            "\(UUID().uuidString)-\(fileName)"
                         )
                     }
 
@@ -158,9 +216,12 @@ final class DownloadManager: ObservableObject {
         tasks[id] = task
 
         observations[id] = task.progress.observe(
-            \.fractionCompleted,
-            options: [.new]
-        ) { [weak self] progress, _ in
+            \Progress.fractionCompleted,
+            options: NSKeyValueObservingOptions.new
+        ) { [weak self] (
+            progress: Progress,
+            _: NSKeyValueObservedChange<Double>
+        ) in
 
             let received = progress.completedUnitCount
             let total = progress.totalUnitCount
@@ -193,6 +254,125 @@ final class DownloadManager: ObservableObject {
 
         items.removeAll {
             $0.id == id
+        }
+    }
+
+    func openFile(
+        _ item: DownloadItem,
+        application: DownloadOpenApplication? = nil
+    ) async {
+        guard item.state == .completed,
+            let destination = item.destination else {
+            return
+        }
+
+        do {
+            try await DownloadedFileOpener.open(
+                destination,
+                application:
+                    application ?? item.options.openApplication,
+                automatic: false
+            )
+
+            setOpeningError(
+                for: item.id,
+                message: nil
+            )
+
+        } catch {
+            setOpeningError(
+                for: item.id,
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    func revealFile(_ item: DownloadItem) {
+        guard item.state == .completed,
+            let destination = item.destination else {
+            return
+        }
+
+        do {
+            try DownloadedFileOpener.reveal(destination)
+
+            setOpeningError(
+                for: item.id,
+                message: nil
+            )
+
+        } catch {
+            setOpeningError(
+                for: item.id,
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    private func setOpeningError(
+        for id: UUID,
+        message: String?
+    ) {
+        guard let index = items.firstIndex(
+            where: { $0.id == id }
+        ) else {
+            return
+        }
+
+        items[index].openingError = message
+    }
+
+    private func performCompletionActions(
+        for id: UUID
+    ) {
+        guard let item = items.first(
+            where: { $0.id == id }
+        ),
+        item.state == .completed,
+        let destination = item.destination else {
+            return
+        }
+
+        Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+
+            var errors: [String] = []
+
+            if item.options.revealWhenCompleted {
+                do {
+                    try DownloadedFileOpener.reveal(
+                        destination
+                    )
+                } catch {
+                    errors.append(
+                        error.localizedDescription
+                    )
+                }
+            }
+
+            if item.options.openWhenCompleted {
+                do {
+                    try await DownloadedFileOpener.open(
+                        destination,
+                        application:
+                            item.options.openApplication,
+                        automatic: true
+                    )
+                } catch {
+                    errors.append(
+                        error.localizedDescription
+                    )
+                }
+            }
+
+            self.setOpeningError(
+                for: id,
+                message: errors.isEmpty
+                    ? nil
+                    : errors.joined(separator: "\n")
+            )
         }
     }
 
@@ -248,13 +428,28 @@ final class DownloadManager: ObservableObject {
         }
 
         updateAwakeReason()
+
+        if items[index].state == .completed {
+            performCompletionActions(
+                for: items[index].id
+            )
+        }
+    }
+
+    var protectedDownloadCount: Int {
+        items.filter {
+            $0.state == .downloading &&
+            $0.options.keepAwake
+        }.count
     }
 
     private func updateAwakeReason() {
+        let count = protectedDownloadCount
+
         sleepManager.setAutomaticReason(
             .downloads,
-            text: activeCount > 0
-                ? "Downloading \(activeCount) file(s)"
+            text: count > 0
+                ? "\(count) protected download(s)"
                 : nil
         )
     }

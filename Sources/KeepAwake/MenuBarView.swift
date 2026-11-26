@@ -20,6 +20,7 @@ struct MenuBarView: View {
 
     let onOpenSettings: () -> Void
     let onHeightChange: (CGFloat) -> Void
+    let onGenerateReport: () -> Void
 
     @AppStorage("selectedSessionMinutes")
     private var selectedMinutes = 60
@@ -149,6 +150,18 @@ struct MenuBarView: View {
             }
 
             Spacer()
+
+            Button {
+                onGenerateReport()
+            } label: {
+                Image(systemName: "doc.text")
+                    .font(.system(size: 15))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .help("Generate System Report")
+            .accessibilityLabel("Generate System Report")
 
             Button {
                 onOpenSettings()

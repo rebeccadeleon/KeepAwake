@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var electricityManager: ElectricityPriceManager!
     private var websiteMonitor: WebsiteMonitor!
     private var assertionMonitor: AssertionMonitor!
+    private var reportManager: ReportManager!
 
     private var appWatcher: AppWatcher!
     private var batteryMonitor: BatteryMonitor!
@@ -70,6 +71,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         assertionMonitor = AssertionMonitor()
 
+        reportManager = ReportManager(
+            sleep: sleepManager,
+            battery: batteryMonitor,
+            watcher: appWatcher,
+            schedule: schedule,
+            assertions: assertionMonitor,
+            downloads: downloadManager,
+            electricity: electricityManager,
+            websites: websiteMonitor
+        )
+
         createPopover()
         createStatusItem()
         observeSleepState()
@@ -80,6 +92,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         configureApplicationMenu()
+        if visibility.startHidden && visibility.canHide {
+            visibility.hide()
+        }
         applyVisibility()
     }
 
@@ -212,6 +227,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             onHeightChange: { [weak self] height in
                 self?.resizePopover(to: height)
+            },
+
+            onGenerateReport: { [weak self] in
+                self?.generateQuickReport()
             }
         )
 
@@ -400,7 +419,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             downloads: downloadManager,
             assertions: assertionMonitor,
             electricity: electricityManager,
-            websites: websiteMonitor
+            websites: websiteMonitor,
+            reports: reportManager
         )
 
         let controller = NSHostingController(
@@ -422,7 +442,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ])
 
         window.setContentSize(
-            NSSize(width: 720, height: 500)
+            NSSize(
+                width: 820,
+                height: 540
+            )
         )
 
         window.minSize = NSSize(
@@ -441,6 +464,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
 
         window.makeKeyAndOrderFront(nil)
+    }
+
+    private func generateQuickReport() {
+        closePopover()
+
+        NSApp.activate(
+            ignoringOtherApps: true
+        )
+
+        Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+
+            guard !self.reportManager.isGenerating else {
+                return
+            }
+
+            await self.reportManager.generate()
+            await self.reportManager.save()
+        }
     }
 
     // MARK: - Application menu
