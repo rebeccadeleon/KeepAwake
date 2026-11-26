@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var downloadManager: DownloadManager!
     private var electricityManager: ElectricityPriceManager!
     private var websiteMonitor: WebsiteMonitor!
+    private var assertionMonitor: AssertionMonitor!
 
     private var appWatcher: AppWatcher!
     private var batteryMonitor: BatteryMonitor!
@@ -67,9 +68,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             sleepManager: sleepManager
         )
 
+        assertionMonitor = AssertionMonitor()
+
         createPopover()
         createStatusItem()
         observeSleepState()
+        observeAssertionState()
 
         visibility.onVisibilityChanged = { [weak self] in
             self?.scheduleVisibilityUpdate()
@@ -138,11 +142,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             symbol = "exclamationmark.circle"
 
         case .inactive:
-            symbol = "cup.and.saucer"
+            symbol = assertionMonitor.hasExternalSleepBlockers
+                ? "cup.and.saucer.badge.exclamationmark"
+                : "cup.and.saucer"
         }
 
         let image = NSImage(
             systemSymbolName: symbol,
+            accessibilityDescription: "KeepAwake"
+        ) ?? NSImage(
+            systemSymbolName: "exclamationmark.circle",
             accessibilityDescription: "KeepAwake"
         )
 
@@ -158,7 +167,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             button.title = ""
         }
 
-        button.toolTip = sleepManager.statusText
+        if assertionMonitor.hasExternalSleepBlockers {
+            button.toolTip =
+                sleepManager.statusText +
+                "\nExternal sleep blockers: " +
+                "\(assertionMonitor.externalBlockingProcesses.count)"
+        } else {
+            button.toolTip = sleepManager.statusText
+        }
+    }
+
+    private func observeAssertionState() {
+        assertionMonitor.$assertions
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.updateStatusItem()
+                }
+            }
+            .store(in: &cancellables)
     }
 
     private func observeSleepState() {
@@ -178,6 +204,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             manager: sleepManager,
             battery: batteryMonitor,
             visibility: visibility,
+            assertionMonitor: assertionMonitor,
 
             onOpenSettings: { [weak self] in
                 self?.openSettings()
@@ -370,8 +397,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             schedule: schedule,
             loginItem: loginItem,
             visibility: visibility,
-
             downloads: downloadManager,
+            assertions: assertionMonitor,
             electricity: electricityManager,
             websites: websiteMonitor
         )
@@ -380,17 +407,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             rootView: view
         )
 
-        let window = NSWindow(
+        let window: NSWindow = NSWindow(
             contentViewController: controller
         )
 
+
         window.title = "KeepAwake Settings"
 
-        window.styleMask = [
+        window.styleMask = NSWindow.StyleMask([
             .titled,
             .closable,
-            .miniaturizable
-        ]
+            .miniaturizable,
+            .resizable
+        ])
 
         window.setContentSize(
             NSSize(width: 720, height: 500)

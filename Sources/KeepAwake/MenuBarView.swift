@@ -16,6 +16,7 @@ struct MenuBarView: View {
     @ObservedObject var manager: SleepManager
     @ObservedObject var battery: BatteryMonitor
     @ObservedObject var visibility: VisibilityManager
+    @ObservedObject var assertionMonitor: AssertionMonitor
 
     let onOpenSettings: () -> Void
     let onHeightChange: (CGFloat) -> Void
@@ -61,6 +62,10 @@ struct MenuBarView: View {
 
             VStack(spacing: 12) {
                 statusSection
+
+                if assertionMonitor.hasExternalSleepBlockers {
+                    externalAssertionsSection
+                }
 
                 if !manager.automaticReasons.isEmpty {
                     automaticRulesSection
@@ -153,6 +158,101 @@ struct MenuBarView: View {
             }
             .buttonStyle(.plain)
             .help("Settings")
+        }
+    }
+
+    private var externalAssertionsSection: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "exclamationmark.circle.fill")
+                    .font(.system(size: 17))
+                    .foregroundStyle(.orange)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("External sleep prevention")
+                        .font(.system(
+                            size: 12,
+                            weight: .semibold
+                        ))
+
+                    Text(
+                        "\(assertionMonitor.externalBlockingProcesses.count) " +
+                        "other process(es) hold sleep assertions."
+                    )
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+            }
+
+            Divider()
+
+            ForEach(
+                Array(
+                    assertionMonitor
+                        .externalBlockingProcesses
+                        .prefix(3)
+                )
+            ) { process in
+                HStack(spacing: 8) {
+                    Image(
+                        systemName: process.name == "caffeinate"
+                            ? "terminal"
+                            : "app"
+                    )
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 16)
+
+                    Text(process.name)
+                        .font(.system(size: 12))
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    if let assertion = process.assertions.first(
+                        where: { $0.preventsSystemSleep }
+                    ) {
+                        Text(assertion.duration)
+                            .font(.system(
+                                size: 10,
+                                design: .monospaced
+                            ))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            if assertionMonitor.externalBlockingProcesses.count > 3 {
+                Text(
+                    "+\(assertionMonitor.externalBlockingProcesses.count - 3) more"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Button {
+                onOpenSettings()
+            } label: {
+                Text("View all assertions")
+                    .font(.system(size: 11))
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.accentColor)
+        }
+        .padding(10)
+        .background(
+            Color.orange.opacity(0.07),
+            in: RoundedRectangle(cornerRadius: 8)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(
+                    Color.orange.opacity(0.15),
+                    lineWidth: 1
+                )
         }
     }
 

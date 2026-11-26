@@ -9,11 +9,10 @@ struct SettingsView: View {
     @ObservedObject var schedule: ScheduleManager
     @ObservedObject var loginItem: LoginItem
     @ObservedObject var visibility: VisibilityManager
+
     @ObservedObject var downloads: DownloadManager
-
-    @ObservedObject var electricity:
-        ElectricityPriceManager
-
+    @ObservedObject var assertions: AssertionMonitor
+    @ObservedObject var electricity: ElectricityPriceManager
     @ObservedObject var websites: WebsiteMonitor
     @State private var searchText = ""
 
@@ -61,6 +60,16 @@ struct SettingsView: View {
                 Label(
                     "Websites",
                     systemImage: "globe"
+                )
+            }
+
+            AssertionSettingsView(
+                monitor: assertions
+            )
+            .tabItem {
+                Label(
+                    "Assertions",
+                    systemImage: "waveform.path"
                 )
             }
 
