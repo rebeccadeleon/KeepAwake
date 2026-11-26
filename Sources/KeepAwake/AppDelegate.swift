@@ -9,6 +9,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private let sleepManager = SleepManager()
     private let visibility = VisibilityManager()
+    private var downloadManager: DownloadManager!
+    private var electricityManager: ElectricityPriceManager!
+    private var websiteMonitor: WebsiteMonitor!
 
     private var appWatcher: AppWatcher!
     private var batteryMonitor: BatteryMonitor!
@@ -50,6 +53,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotKey = HotKey(
             sleepManager: sleepManager,
             visibilityManager: visibility
+        )
+
+        downloadManager = DownloadManager(
+            sleepManager: sleepManager
+        )
+
+        electricityManager = ElectricityPriceManager(
+            sleepManager: sleepManager
+        )
+
+        websiteMonitor = WebsiteMonitor(
+            sleepManager: sleepManager
         )
 
         createPopover()
@@ -354,7 +369,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             hotKey: hotKey,
             schedule: schedule,
             loginItem: loginItem,
-            visibility: visibility
+            visibility: visibility,
+
+            downloads: downloadManager,
+            electricity: electricityManager,
+            websites: websiteMonitor
         )
 
         let controller = NSHostingController(
@@ -374,8 +393,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ]
 
         window.setContentSize(
-            NSSize(width: 560, height: 440)
+            NSSize(width: 720, height: 500)
         )
+
+        window.minSize = NSSize(
+            width: 720,
+            height: 500
+        )
+
+        window.styleMask.insert(.resizable)
 
         window.isReleasedWhenClosed = false
 

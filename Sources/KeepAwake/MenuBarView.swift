@@ -62,6 +62,10 @@ struct MenuBarView: View {
             VStack(spacing: 12) {
                 statusSection
 
+                if !manager.automaticReasons.isEmpty {
+                    automaticRulesSection
+                }
+
                 durationSection
 
                 if manager.isManualActive,
@@ -149,6 +153,109 @@ struct MenuBarView: View {
             }
             .buttonStyle(.plain)
             .help("Settings")
+        }
+    }
+
+    private var automaticRulesSection: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text("ACTIVE RULES")
+                .font(.system(
+                    size: 10,
+                    weight: .semibold
+                ))
+                .foregroundStyle(.secondary)
+
+            ForEach(
+                AutomaticAwakeReason.allCases,
+                id: \.self
+            ) { reason in
+                if let description =
+                    manager.automaticReasons[reason] {
+
+                    HStack(spacing: 8) {
+                        Image(systemName: ruleIcon(reason))
+                            .foregroundStyle(ruleColor(reason))
+                            .frame(width: 20)
+
+                        VStack(
+                            alignment: .leading,
+                            spacing: 2
+                        ) {
+                            Text(ruleTitle(reason))
+                                .font(.system(
+                                    size: 12,
+                                    weight: .medium
+                                ))
+
+                            Text(description)
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Image(
+                            systemName: "checkmark.circle.fill"
+                        )
+                        .font(.system(size: 12))
+                        .foregroundStyle(
+                            manager.isActive
+                                ? Color.green
+                                : Color.secondary
+                        )
+                    }
+                }
+            }
+        }
+        .padding(10)
+        .background(
+            secondaryBackground,
+            in: RoundedRectangle(cornerRadius: 8)
+        )
+    }
+
+    private func ruleIcon(
+        _ reason: AutomaticAwakeReason
+    ) -> String {
+        switch reason {
+        case .downloads:
+            return "arrow.down.circle"
+
+        case .electricity:
+            return "bolt.circle"
+
+        case .websiteMonitoring:
+            return "globe"
+        }
+    }
+
+    private func ruleTitle(
+        _ reason: AutomaticAwakeReason
+    ) -> String {
+        switch reason {
+        case .downloads:
+            return "Downloads"
+
+        case .electricity:
+            return "Electricity"
+
+        case .websiteMonitoring:
+            return "Websites"
+        }
+    }
+
+    private func ruleColor(
+        _ reason: AutomaticAwakeReason
+    ) -> Color {
+        switch reason {
+        case .downloads:
+            return .blue
+
+        case .electricity:
+            return .orange
+
+        case .websiteMonitoring:
+            return .green
         }
     }
 

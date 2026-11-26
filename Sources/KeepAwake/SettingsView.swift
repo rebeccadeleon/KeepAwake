@@ -9,6 +9,12 @@ struct SettingsView: View {
     @ObservedObject var schedule: ScheduleManager
     @ObservedObject var loginItem: LoginItem
     @ObservedObject var visibility: VisibilityManager
+    @ObservedObject var downloads: DownloadManager
+
+    @ObservedObject var electricity:
+        ElectricityPriceManager
+
+    @ObservedObject var websites: WebsiteMonitor
     @State private var searchText = ""
 
     var body: some View {
@@ -28,6 +34,36 @@ struct SettingsView: View {
                     Label("Schedule", systemImage: "calendar")
                 }
 
+            DownloadSettingsView(
+                manager: downloads
+            )
+            .tabItem {
+                Label(
+                    "Downloads",
+                    systemImage: "arrow.down.circle"
+                )
+            }
+
+            ElectricitySettingsView(
+                manager: electricity
+            )
+            .tabItem {
+                Label(
+                    "Energy",
+                    systemImage: "bolt.circle"
+                )
+            }
+
+            WebsiteSettingsView(
+                manager: websites
+            )
+            .tabItem {
+                Label(
+                    "Websites",
+                    systemImage: "globe"
+                )
+            }
+
             appearanceTab
                 .tabItem {
                     Label(
@@ -42,7 +78,6 @@ struct SettingsView: View {
                 }
         }
         .padding(12)
-        .frame(width: 560, height: 440)
     }
 
     // MARK: - General

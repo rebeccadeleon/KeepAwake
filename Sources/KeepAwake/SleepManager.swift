@@ -10,6 +10,12 @@ enum AwakeState: Equatable {
     case failed(String)
 }
 
+enum AutomaticAwakeReason: String, CaseIterable, Hashable {
+    case downloads
+    case electricity
+    case websiteMonitoring
+}
+
 @MainActor
 final class SleepManager: ObservableObject {
     private static let allowDisplaySleepKey = "allowDisplaySleep"
@@ -23,6 +29,8 @@ final class SleepManager: ObservableObject {
     @Published private(set) var triggeringApps: [String] = []
     @Published private(set) var state: AwakeState = .inactive
     @Published private(set) var assertionError: String?
+    @Published private(set) var automaticReasons:
+    [AutomaticAwakeReason: String] = [:]
 
     @Published var allowDisplaySleep =
         UserDefaults.standard.bool(
@@ -51,7 +59,27 @@ final class SleepManager: ObservableObject {
     var wantsAwake: Bool {
         isManualActive ||
         !triggeringApps.isEmpty ||
-        scheduleEndText != nil
+        scheduleEndText != nil ||
+        !automaticReasons.isEmpty
+    }
+
+    func setAutomaticReason(
+        _ reason: AutomaticAwakeReason,
+        text: String?
+    ) {
+        guard automaticReasons[reason] != text else {
+            return
+        }
+
+        if let text {
+            automaticReasons[reason] = text
+        } else {
+            automaticReasons.removeValue(
+                forKey: reason
+            )
+        }
+
+        updateAssertion()
     }
 
     var isActive: Bool {
@@ -109,6 +137,12 @@ final class SleepManager: ObservableObject {
             reasons.append(
                 "Scheduled until \(scheduleEndText)"
             )
+        }
+
+        for reason in AutomaticAwakeReason.allCases {
+            if let text = automaticReasons[reason] {
+                reasons.append(text)
+            }
         }
 
         return reasons.isEmpty
