@@ -8,7 +8,7 @@ struct SettingsView: View {
     @ObservedObject var hotKey: HotKey
     @ObservedObject var schedule: ScheduleManager
     @ObservedObject var loginItem: LoginItem
-
+    @ObservedObject var visibility: VisibilityManager
     @State private var searchText = ""
 
     var body: some View {
@@ -26,6 +26,14 @@ struct SettingsView: View {
             scheduleTab
                 .tabItem {
                     Label("Schedule", systemImage: "calendar")
+                }
+
+            appearanceTab
+                .tabItem {
+                    Label(
+                        "Appearance",
+                        systemImage: "macwindow"
+                    )
                 }
 
             aboutTab
@@ -296,6 +304,126 @@ struct SettingsView: View {
             )
             .font(.caption)
             .foregroundStyle(.secondary)
+        }
+        .formStyle(.grouped)
+    }
+
+    // MARK: - Appearance
+
+    private var appearanceTab: some View {
+        Form {
+            Section("Application visibility") {
+                Toggle(
+                    isOn: Binding(
+                        get: {
+                            visibility.showInDock
+                        },
+                        set: {
+                            visibility.setShowInDock($0)
+                        }
+                    )
+                ) {
+                    Label(
+                        "Show in Dock",
+                        systemImage: "dock.rectangle"
+                    )
+                }
+
+                Toggle(
+                    isOn: Binding(
+                        get: {
+                            visibility.showInMenuBar
+                        },
+                        set: {
+                            visibility.setShowInMenuBar($0)
+                        }
+                    )
+                ) {
+                    Label(
+                        "Show in menu bar",
+                        systemImage: "menubar.rectangle"
+                    )
+                }
+            }
+
+            Section("Recovery shortcut") {
+                HStack {
+                    Text("Toggle application visibility")
+
+                    Spacer()
+
+                    Text(HotKey.visibilityDisplayName)
+                        .font(.system(
+                            size: 13,
+                            design: .monospaced
+                        ))
+                        .padding(6)
+                        .background {
+                            RoundedRectangle(cornerRadius: 5)
+                                .fill(
+                                    Color.secondary.opacity(0.08)
+                                )
+                        }
+                }
+
+                if hotKey.isVisibilityRegistered {
+                    Label(
+                        "Shortcut registered",
+                        systemImage: "checkmark.circle.fill"
+                    )
+                    .foregroundStyle(.green)
+                    .font(.caption)
+                } else {
+                    Label(
+                        "Shortcut unavailable",
+                        systemImage: "exclamationmark.triangle"
+                    )
+                    .foregroundStyle(.orange)
+                    .font(.caption)
+
+                    Button("Retry Registration") {
+                        hotKey.retryVisibilityRegistration()
+                    }
+                }
+
+                if let error = hotKey.registrationError {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Section("Background operation") {
+                Text(
+                    "KeepAwake continues running when its " +
+                    "Dock and menu bar icons are hidden."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                Text(
+                    "Press \(HotKey.visibilityDisplayName) " +
+                    "to restore application visibility."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                Button("Hide KeepAwake") {
+                    visibility.hide()
+                }
+                .disabled(!visibility.canHide)
+            }
+
+            if let error = visibility.visibilityError {
+                Section {
+                    Label(
+                        error,
+                        systemImage: "exclamationmark.triangle"
+                    )
+                    .foregroundStyle(.orange)
+                    .font(.caption)
+                }
+            }
         }
         .formStyle(.grouped)
     }

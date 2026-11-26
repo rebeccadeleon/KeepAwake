@@ -1,11 +1,24 @@
 import SwiftUI
 import AppKit
 
+private struct ContentHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(
+        value: inout CGFloat,
+        nextValue: () -> CGFloat
+    ) {
+        value = max(value, nextValue())
+    }
+}
+
 struct MenuBarView: View {
     @ObservedObject var manager: SleepManager
     @ObservedObject var battery: BatteryMonitor
+    @ObservedObject var visibility: VisibilityManager
 
-    @Environment(\.openWindow) private var openWindow
+    let onOpenSettings: () -> Void
+    let onHeightChange: (CGFloat) -> Void
 
     @AppStorage("selectedSessionMinutes")
     private var selectedMinutes = 60
@@ -14,41 +27,87 @@ struct MenuBarView: View {
     @State private var customMinutes = 0
     @State private var showCustomDuration = false
 
+    @Environment(\.colorScheme)
+    private var colorScheme
+
+    private var panelBackground: Color {
+        colorScheme == .dark
+            ? Color(red: 0.12, green: 0.13, blue: 0.15)
+            : Color.white
+    }
+
+    private var secondaryBackground: Color {
+        colorScheme == .dark
+            ? Color.white.opacity(0.07)
+            : Color(red: 0.95, green: 0.96, blue: 0.98)
+    }
+
+    private var borderColor: Color {
+        colorScheme == .dark
+            ? Color.white.opacity(0.10)
+            : Color.black.opacity(0.07)
+    }
+
     private let durations = [
         15, 30, 60, 120, 240, 480, 0
     ]
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 0) {
             header
+                .padding(14)
 
             Divider()
 
-            statusSection
+            VStack(spacing: 12) {
+                statusSection
 
-            durationSection
+                durationSection
 
-            if manager.isManualActive,
-               manager.endDate != nil {
-                extensionSection
+                if manager.isManualActive,
+                manager.endDate != nil {
+                    extensionSection
+                }
+
+                Divider()
+
+                optionsSection
+
+                if let error = manager.assertionError {
+                    errorSection(error)
+                }
+
+                actionSection
             }
-
-            Divider()
-
-            optionsSection
-
-            if let error = manager.assertionError {
-                errorSection(error)
-            }
-
-            actionSection
+            .padding(14)
+            .frame(maxWidth: .infinity)
 
             Divider()
 
             footer
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
         }
-        .padding(16)
-        .frame(width: 340)
+        .frame(width: 320)
+        .fixedSize(horizontal: false, vertical: true)
+        .background(panelBackground)
+        .background {
+            GeometryReader { geometry in
+                Color.clear.preference(
+                    key: ContentHeightPreferenceKey.self,
+                    value: geometry.size.height
+                )
+            }
+        }
+        .onPreferenceChange(
+            ContentHeightPreferenceKey.self
+        ) { height in
+            guard height > 0 else {
+                return
+            }
+
+            onHeightChange(height)
+        }
     }
 
     // MARK: - Header
@@ -83,11 +142,10 @@ struct MenuBarView: View {
             Spacer()
 
             Button {
-                openWindow(id: "settings")
-                NSApp.activate(ignoringOtherApps: true)
+                onOpenSettings()
             } label: {
                 Image(systemName: "gearshape")
-                    .font(.system(size: 18))
+                    .font(.system(size: 15))
             }
             .buttonStyle(.plain)
             .help("Settings")
@@ -97,42 +155,47 @@ struct MenuBarView: View {
     // MARK: - Status
 
     private var statusSection: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 5) {
             Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
+                if !manager.wantsAwake {
+                    startSession()
+                } else {
                     manager.toggle()
                 }
             } label: {
                 ZStack {
                     Circle()
-                        .fill(statusColor.opacity(0.08))
+                        .fill(statusColor.opacity(0.06))
 
                     Circle()
                         .strokeBorder(
-                            statusColor.opacity(0.6),
-                            lineWidth: 2
+                            statusColor.opacity(0.35),
+                            lineWidth: 1.5
                         )
 
                     Image(systemName: statusIcon)
                         .font(.system(
-                            size: 38,
+                            size: 28,
                             weight: .medium
                         ))
                         .foregroundStyle(statusColor)
                 }
-                .frame(width: 100, height: 100)
+                .frame(width: 72, height: 72)
             }
             .buttonStyle(.plain)
             .help("Toggle KeepAwake")
 
             Text(manager.statusText)
-                .font(.system(size: 17, weight: .semibold))
+                .font(.system(
+                    size: 15,
+                    weight: .semibold
+                ))
 
             if let remaining = manager.remainingText {
                 Text(remaining)
                     .font(.system(
-                        size: 28,
-                        weight: .medium,
+                        size: 24,
+                        weight: .semibold,
                         design: .rounded
                     ))
                     .monospacedDigit()
@@ -140,13 +203,13 @@ struct MenuBarView: View {
             }
 
             Text(manager.reasonText)
-                .font(.caption)
+                .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-                .lineLimit(3)
+                .lineLimit(2)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 4)
+        .padding(.vertical, 2)
     }
 
     // MARK: - Duration
@@ -177,9 +240,7 @@ struct MenuBarView: View {
                         .frame(height: 30)
                         .background(
                             RoundedRectangle(cornerRadius: 6)
-                                .fill(
-                                    Color.secondary.opacity(0.1)
-                                )
+                                .fill(secondaryBackground)
                         )
                 }
                 .buttonStyle(.plain)
@@ -191,7 +252,9 @@ struct MenuBarView: View {
         }
     }
 
-    private func durationButton(_ minutes: Int) -> some View {
+    private func durationButton(
+        _ minutes: Int
+    ) -> some View {
         let selected = selectedMinutes == minutes
 
         return Button {
@@ -199,20 +262,30 @@ struct MenuBarView: View {
             showCustomDuration = false
         } label: {
             Text(durationLabel(minutes))
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(
+                    size: 12,
+                    weight: .medium
+                ))
                 .foregroundStyle(
                     selected ? Color.white : Color.primary
                 )
                 .frame(maxWidth: .infinity)
-                .frame(height: 30)
-                .background(
+                .frame(height: 28)
+                .background {
                     RoundedRectangle(cornerRadius: 6)
                         .fill(
                             selected
                                 ? Color.accentColor
-                                : Color.secondary.opacity(0.1)
+                                : secondaryBackground
                         )
-                )
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(
+                            selected ? Color.clear : borderColor,
+                            lineWidth: 1
+                        )
+                }
         }
         .buttonStyle(.plain)
     }
@@ -271,27 +344,48 @@ struct MenuBarView: View {
 
     private var optionsSection: some View {
         VStack(spacing: 10) {
-            Toggle(isOn: $manager.allowDisplaySleep) {
-                Label(
-                    "Allow display sleep",
-                    systemImage: "display"
-                )
-            }
-            .toggleStyle(.switch)
-            .controlSize(.small)
+            HStack(spacing: 8) {
+                Image(systemName: "display")
+                    .foregroundStyle(.secondary)
+                    .frame(width: 18)
 
-            if battery.hasBattery {
-                Toggle(isOn: $battery.pauseOnLowBattery) {
-                    Label(
-                        "Battery protection",
-                        systemImage: "battery.100"
-                    )
-                }
+                Text("Allow display sleep")
+
+                Spacer()
+
+                Toggle(
+                    "",
+                    isOn: $manager.allowDisplaySleep
+                )
+                .labelsHidden()
                 .toggleStyle(.switch)
                 .controlSize(.small)
+                .accessibilityLabel("Allow display sleep")
+            }
+
+            if battery.hasBattery {
+                HStack(spacing: 8) {
+                    Image(systemName: "battery.100")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 18)
+
+                    Text("Battery protection")
+
+                    Spacer()
+
+                    Toggle(
+                        "",
+                        isOn: $battery.pauseOnLowBattery
+                    )
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .accessibilityLabel("Battery protection")
+                }
             }
         }
         .font(.system(size: 12))
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Error
@@ -316,48 +410,104 @@ struct MenuBarView: View {
     // MARK: - Actions
 
     private var actionSection: some View {
-        VStack(spacing: 8) {
-            if manager.isPausedManually && manager.wantsAwake {
-                primaryButton("Resume KeepAwake") {
-                    manager.resume()
+        VStack(spacing: 6) {
+            if manager.wantsAwake {
+                HStack(spacing: 8) {
+                    if manager.isPausedManually {
+                        actionButton(
+                            "Resume",
+                            icon: "play.fill",
+                            color: .accentColor
+                        ) {
+                            manager.resume()
+                        }
+                    } else {
+                        actionButton(
+                            "Pause",
+                            icon: "pause.fill",
+                            color: .primary
+                        ) {
+                            manager.pause()
+                        }
+                    }
+
+                    actionButton(
+                        "Stop",
+                        icon: "stop.fill",
+                        color: .red
+                    ) {
+                        manager.stopAll()
+                    }
                 }
-            } else if manager.wantsAwake &&
-                        !manager.isPausedManually {
-                Button {
-                    manager.pause()
-                } label: {
-                    Text("Pause KeepAwake")
-                        .frame(maxWidth: .infinity)
+
+                if manager.isManualActive {
+                    Menu {
+                        Button("Restart with Selected Duration") {
+                            startSession()
+                        }
+
+                        Button("End Manual Session") {
+                            manager.deactivate()
+                        }
+                    } label: {
+                        Text("Session Options")
+                            .font(.system(size: 11))
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
                 }
-                .controlSize(.large)
             } else {
                 primaryButton(
                     "Start · \(durationLabel(selectedMinutes))"
                 ) {
                     startSession()
                 }
-            }
 
-            if manager.isManualActive {
-                Button("Restart with Selected Duration") {
-                    startSession()
+                if manager.isPausedManually {
+                    Button("Resume Automatic Rules") {
+                        manager.resume()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
                 }
-                .font(.caption)
-
-                Button("End Manual Session") {
-                    manager.deactivate()
-                }
-                .font(.caption)
-            }
-
-            if manager.wantsAwake {
-                Button("Stop All Activity") {
-                    manager.stopAll()
-                }
-                .font(.caption)
-                .foregroundStyle(.red)
             }
         }
+    }
+
+    private func actionButton(
+        _ title: String,
+        icon: String,
+        color: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 10))
+
+                Text(title)
+                    .font(.system(
+                        size: 12,
+                        weight: .medium
+                    ))
+            }
+            .foregroundStyle(color)
+            .frame(maxWidth: .infinity)
+            .frame(height: 30)
+            .background {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(secondaryBackground)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(
+                        borderColor,
+                        lineWidth: 1
+                    )
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     private func primaryButton(
@@ -366,28 +516,60 @@ struct MenuBarView: View {
     ) -> some View {
         Button(action: action) {
             Text(title)
+                .font(.system(
+                    size: 13,
+                    weight: .semibold
+                ))
+                .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
+                .frame(height: 32)
+                .background {
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(Color.accentColor)
+                }
         }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
+        .buttonStyle(.plain)
     }
 
     // MARK: - Footer
 
     private var footer: some View {
-        HStack {
+        HStack(spacing: 12) {
             Text(HotKey.displayName)
-                .font(.caption)
+                .font(.system(size: 11))
                 .foregroundStyle(.secondary)
+                .help("Toggle sleep prevention")
 
             Spacer()
+
+            Button {
+                visibility.hide()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "eye.slash")
+                        .font(.system(size: 10))
+
+                    Text("Hide")
+                        .font(.system(size: 11))
+                }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .disabled(!visibility.canHide)
+            .help(
+                "Hide KeepAwake · " +
+                HotKey.visibilityDisplayName
+            )
+
+            Divider()
+                .frame(height: 12)
 
             Button("Quit") {
                 manager.stopAll()
                 NSApplication.shared.terminate(nil)
             }
             .buttonStyle(.plain)
-            .font(.caption)
+            .font(.system(size: 11))
             .foregroundStyle(.secondary)
         }
     }

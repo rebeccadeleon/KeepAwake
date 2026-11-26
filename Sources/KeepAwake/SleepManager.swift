@@ -245,9 +245,11 @@ final class SleepManager: ObservableObject {
                 return
             }
 
-            if isPausedManually {
+            if !wantsAwake {
+                state = .inactive
+            } else if isPausedManually {
                 state = .pausedManually
-            } else if wantsAwake && isPausedForLowBattery {
+            } else if isPausedForLowBattery {
                 state = .pausedLowBattery
             } else {
                 state = .inactive
