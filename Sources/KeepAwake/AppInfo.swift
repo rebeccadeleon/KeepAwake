@@ -3,7 +3,13 @@ import Foundation
 enum AppInfo {
     static let name = "KeepAwake"
 
-    static let description = "KeepAwake is an intelligent macOS sleep prevention / power management utility featuring customizable sessions, application-based rules, automatic schedules, battery protection, download management, website monitoring, electricity price integration, real-time sleep assertion monitoring, and comprehensive system diagnostics / reports."
+    static let description = """
+Smart sleep prevention / power management / \
+system resource monitoring / download protection / \
+website monitoring / sleep assertion monitoring / \
+activity analytics / system diagnostics and reporting \
+for macOS.
+"""
 
     static let terms = """
 KeepAwake Terms of Use:

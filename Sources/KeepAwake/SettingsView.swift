@@ -16,6 +16,7 @@ struct SettingsView: View {
     @ObservedObject var websites: WebsiteMonitor
     @ObservedObject var reports: ReportManager
     @ObservedObject var activity: ActivityHistoryManager
+    @ObservedObject var resources: ResourceMonitor
     @State private var searchText = ""
 
     var body: some View {
@@ -82,6 +83,16 @@ struct SettingsView: View {
                 Label(
                     "Activity",
                     systemImage: "chart.bar.xaxis"
+                )
+            }
+
+            ResourceSettingsView(
+                manager: resources
+            )
+            .tabItem {
+                Label(
+                    "Resources",
+                    systemImage: "cpu"
                 )
             }
 

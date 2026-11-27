@@ -339,6 +339,15 @@ struct MenuBarView: View {
 
         case .websiteMonitoring:
             return "globe"
+
+        case .cpuActivity:
+            return "cpu"
+
+        case .networkActivity:
+            return "network"
+
+        case .diskActivity:
+            return "internaldrive"
         }
     }
 
@@ -354,6 +363,15 @@ struct MenuBarView: View {
 
         case .websiteMonitoring:
             return "Websites"
+
+        case .cpuActivity:
+            return "CPU Activity"
+
+        case .networkActivity:
+            return "Network Activity"
+
+        case .diskActivity:
+            return "Disk Activity"
         }
     }
 
@@ -369,6 +387,15 @@ struct MenuBarView: View {
 
         case .websiteMonitoring:
             return .green
+
+        case .cpuActivity:
+            return .purple
+
+        case .networkActivity:
+            return .cyan
+
+        case .diskActivity:
+            return .orange
         }
     }
 

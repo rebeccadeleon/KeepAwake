@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var assertionMonitor: AssertionMonitor!
     private var reportManager: ReportManager!
     private var activityManager: ActivityHistoryManager!
+    private var resourceMonitor: ResourceMonitor!
 
     private var appWatcher: AppWatcher!
     private var batteryMonitor: BatteryMonitor!
@@ -78,6 +79,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             downloadManager: downloadManager
         )
 
+        resourceMonitor = ResourceMonitor(
+            sleepManager: sleepManager
+        )
+
         reportManager = ReportManager(
             sleep: sleepManager,
             battery: batteryMonitor,
@@ -110,6 +115,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(
         _ notification: Notification
     ) {
+        resourceMonitor?.stopMonitoring()
+
         activityManager?.shutdown()
     }
 
@@ -447,7 +454,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             electricity: electricityManager,
             websites: websiteMonitor,
             reports: reportManager,
-            activity: activityManager
+            activity: activityManager,
+            resources: resourceMonitor
         )
 
         let controller = NSHostingController(

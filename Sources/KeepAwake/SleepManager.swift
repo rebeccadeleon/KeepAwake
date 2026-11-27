@@ -14,6 +14,10 @@ enum AutomaticAwakeReason: String, CaseIterable, Hashable {
     case downloads
     case electricity
     case websiteMonitoring
+
+    case cpuActivity
+    case networkActivity
+    case diskActivity
 }
 
 @MainActor
