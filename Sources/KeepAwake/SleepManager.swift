@@ -35,6 +35,7 @@ final class SleepManager: ObservableObject {
     @Published private(set) var assertionError: String?
     @Published private(set) var automaticReasons:
     [AutomaticAwakeReason: String] = [:]
+    @Published private(set) var batteryPauseReason: String?
 
     @Published var allowDisplaySleep =
         UserDefaults.standard.bool(
@@ -105,7 +106,7 @@ final class SleepManager: ObservableObject {
             return "Your Mac is awake"
 
         case .pausedLowBattery:
-            return "Paused: Low battery"
+            return batteryPauseReason ?? "Paused for low battery"
 
         case .pausedManually:
             return "Paused manually"
@@ -249,10 +250,21 @@ final class SleepManager: ObservableObject {
 
     // MARK: - Automatic triggers
 
-    func setPausedForLowBattery(_ paused: Bool) {
-        if isPausedForLowBattery != paused {
-            isPausedForLowBattery = paused
+    func setPausedForLowBattery(
+        _ paused: Bool,
+        reason: String? = nil
+    ) {
+        let newReason = paused
+            ? reason ?? "Low battery protection"
+            : nil
+
+        guard isPausedForLowBattery != paused ||
+            batteryPauseReason != newReason else {
+            return
         }
+
+        isPausedForLowBattery = paused
+        batteryPauseReason = newReason
 
         updateAssertion()
     }

@@ -81,6 +81,10 @@ struct MenuBarView: View {
 
                 Divider()
 
+                if battery.hasBattery {
+                    batteryStatusSection
+                }
+
                 optionsSection
 
                 if let error = manager.assertionError {
@@ -396,6 +400,58 @@ struct MenuBarView: View {
 
         case .diskActivity:
             return .orange
+        }
+    }
+
+    private var batteryStatusSection: some View {
+        Group {
+            if let information = battery.information {
+                HStack(spacing: 10) {
+                    Image(
+                        systemName: information.isCharging
+                            ? "battery.100.bolt"
+                            : "battery.100"
+                    )
+                    .font(.system(size: 19))
+                    .foregroundStyle(
+                        battery.isProtectionActive
+                            ? Color.orange
+                            : Color.green
+                    )
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(
+                            "\(information.percentage)% · " +
+                            information.powerSource
+                        )
+                        .font(.system(
+                            size: 12,
+                            weight: .medium
+                        ))
+
+                        Text(
+                            battery.protectionReason ??
+                            information.chargingStatus
+                        )
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    if battery.isProtectionActive {
+                        Image(
+                            systemName: "shield.lefthalf.filled"
+                        )
+                        .foregroundStyle(.orange)
+                    }
+                }
+                .padding(10)
+                .background(
+                    secondaryBackground,
+                    in: RoundedRectangle(cornerRadius: 8)
+                )
+            }
         }
     }
 

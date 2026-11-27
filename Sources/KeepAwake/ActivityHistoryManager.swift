@@ -176,7 +176,8 @@ final class ActivityHistoryManager: ObservableObject {
                 record(
                     .sessionPaused,
                     detail: sleepManager.isPausedForLowBattery
-                        ? "Low battery protection"
+                        ? sleepManager.batteryPauseReason ??
+                            "Battery protection"
                         : "Manually paused"
                 )
             } else {

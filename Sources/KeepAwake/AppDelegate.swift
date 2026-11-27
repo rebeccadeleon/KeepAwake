@@ -115,6 +115,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(
         _ notification: Notification
     ) {
+        batteryMonitor?.shutdown()
+
         resourceMonitor?.stopMonitoring()
 
         activityManager?.shutdown()

@@ -191,13 +191,61 @@ final class ReportManager: ObservableObject {
 
             field(
                 "Protection threshold",
-                "\(BatteryMonitor.threshold)%"
+                "\(battery.effectivePauseThreshold)%"
             ),
 
             field(
                 "Protection active",
                 yesNo(sleep.isPausedForLowBattery)
-            )
+            ),
+
+            field(
+                "Resume threshold",
+                "\(battery.effectiveResumeThreshold)%"
+            ),
+
+            field(
+                "AC power only",
+                yesNo(battery.acPowerOnly)
+            ),
+
+            field(
+                "Battery percentage",
+                battery.information.map {
+                    "\($0.percentage)%"
+                } ?? "Unavailable"
+            ),
+
+            field(
+                "Power source",
+                battery.information?.powerSource ??
+                    "Unavailable"
+            ),
+
+            field(
+                "Charging status",
+                battery.information?.chargingStatus ??
+                    "Unavailable"
+            ),
+
+            field(
+                "Battery cycle count",
+                battery.information?.cycleCount.map {
+                    String($0)
+                } ?? "Unavailable"
+            ),
+
+            field(
+                "Estimated battery health",
+                battery.information?.healthPercentage.map {
+                    String(format: "%.1f%%", $0)
+                } ?? "Unavailable"
+            ),
+
+            field(
+                "Protection reason",
+                battery.protectionReason ?? "None"
+            ),
         ]
 
         if result.succeeded {

@@ -86,6 +86,16 @@ struct SettingsView: View {
                 )
             }
 
+            BatterySettingsView(
+                manager: battery
+            )
+            .tabItem {
+                Label(
+                    "Battery",
+                    systemImage: "battery.100"
+                )
+            }
+
             ResourceSettingsView(
                 manager: resources
             )
@@ -148,7 +158,7 @@ struct SettingsView: View {
 
                 if battery.hasBattery {
                     Toggle(
-                        "Pause when battery is at or below \(BatteryMonitor.threshold)%",
+                        "Pause when battery is at or below \(battery.effectivePauseThreshold)%",
                         isOn: $battery.pauseOnLowBattery
                     )
                 }
